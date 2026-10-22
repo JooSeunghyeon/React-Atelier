@@ -1,4 +1,4 @@
-# React
+# React Atelier
 
 컴포넌트를 짜 보면서 남긴 코드다. 폴더를 열면 README에 어디부터 보면 되는지 적혀 있다.
 
