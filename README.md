@@ -1,7 +1,7 @@
-# React 공부 예제
+# React
 
-하루에 하나씩 작은 예제를 폴더로 쌓는다. 각 폴더의 README에 무엇을 하는지, 코드를 어떻게 읽으면 되는지 적는다.
+컴포넌트를 짜 보면서 남긴 코드다. 폴더를 열면 README에 어디부터 보면 되는지 적혀 있다.
 
 ## 목록
 
-- [react-counter-basics](packages/react-counter-basics/README.md): useState 훅으로 카운터 상태를 관리하는 가장 짧은 React 함수형 컴포넌트 예제다.
+- [react-counter-basics](packages/react-counter-basics/README.md): 증가, 감소 버튼으로 숫자를 바꾼다.
