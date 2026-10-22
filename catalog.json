@@ -1,1 +1,6 @@
-[]
+[
+  {
+    "folder": "react-counter-basics",
+    "summary": "useState 훅으로 카운터 상태를 관리하는 가장 짧은 React 함수형 컴포넌트 예제다."
+  }
+]
