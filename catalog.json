@@ -2,5 +2,9 @@
   {
     "folder": "react-counter-basics",
     "summary": "증가, 감소 버튼으로 숫자를 바꾼다."
+  },
+  {
+    "folder": "usecallback-memo-child-rerender",
+    "summary": "useCallback으로 감싼 함수를 React.memo 자식에 넘겼을 때 리렌더링 여부를 console.log로 확인하는 예제"
   }
 ]

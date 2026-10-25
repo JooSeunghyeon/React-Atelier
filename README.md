@@ -5,3 +5,4 @@
 ## 목록
 
 - [react-counter-basics](packages/react-counter-basics/README.md): 증가, 감소 버튼으로 숫자를 바꾼다.
+- [usecallback-memo-child-rerender](packages/usecallback-memo-child-rerender/README.md): useCallback으로 감싼 함수를 React.memo 자식에 넘겼을 때 리렌더링 여부를 console.log로 확인하는 예제
