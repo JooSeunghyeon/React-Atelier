@@ -6,5 +6,9 @@
   {
     "folder": "usecallback-memo-child-rerender",
     "summary": "useCallback으로 감싼 함수를 React.memo 자식에 넘겼을 때 리렌더링 여부를 console.log로 확인하는 예제"
+  },
+  {
+    "folder": "react-usereducer-unknown-action-default",
+    "summary": "useReducer에 정의되지 않은 액션 타입을 dispatch했을 때 default 분기가 실행되고 상태가 유지되는지 console.log로 확인한다."
   }
 ]
