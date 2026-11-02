@@ -10,5 +10,9 @@
   {
     "folder": "react-usereducer-unknown-action-default",
     "summary": "useReducer에 정의되지 않은 액션 타입을 dispatch했을 때 default 분기가 실행되고 상태가 유지되는지 console.log로 확인한다."
+  },
+  {
+    "folder": "react-number-input-empty-to-zero",
+    "summary": "number 입력의 onChange에서 빈 문자열이 Number('')로 변환되어 0이 되는 경계 동작을 console.log로 확인한다."
   }
 ]
