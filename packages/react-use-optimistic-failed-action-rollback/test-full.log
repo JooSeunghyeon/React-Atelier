@@ -1,0 +1,30 @@
+
+> react-use-optimistic-failed-action-rollback@1.0.0 test
+> node src/optimistic-counter.test.js
+
+================================================================================
+React useOptimistic 비동기 액션 실패 시 롤백 테스트
+================================================================================
+
+=== Test 1: 성공하는 액션 - 낙관적 값이 실제 상태로 확정됨 ===
+The current testing environment is not configured to support act(...)
+✅ PASS: 초기 count는 0
+✅ PASS: 초기 optimisticCount는 0
+✅ PASS: 초기 isPending은 false
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+✅ PASS: 액션 시작 직후 optimisticCount는 1
+✅ PASS: 액션 시작 직후 count는 여전히 0
+✅ PASS: 액션 진행 중 isPending은 true
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+✅ PASS: 액션 완료 후 count는 1
+✅ PASS: 액션 완료 후 optimisticCount는 1
+✅ PASS: 액션 완료 후 isPending은 false
+
+=== Test 2: 실패하는 액션 (catch 없음) - 낙관적 값이 롤백됨 ===
+The current testing environment is not configured to support act(...)
+✅ PASS: 초기 count는 0
+✅ PASS: 초기 optimisticCount는 0
+Exit code: 1
