@@ -31,14 +31,25 @@ export function createResourceCache(fetchFn) {
 }
 
 /**
- * 렌더링마다 새 Promise를 생성하는 컴포넌트 (캐시 없음)
+ * 렌더링마다 새 Promise를 생성하는 컴포넌트를 만드는 팩토리
  */
-export function UncachedDataComponent({ delayMs = 50 }) {
-  const promise = new Promise(resolve => {
-    setTimeout(() => resolve('Data'), delayMs);
-  });
-  const data = use(promise);
-  return createElement('div', null, data);
+export function createUncachedDataComponent() {
+  let createdCount = 0;
+
+  function UncachedDataComponent({ delayMs = 50 }) {
+    createdCount++;
+    const promise = new Promise(resolve => {
+      setTimeout(() => resolve('Data'), delayMs);
+    });
+    const data = use(promise);
+    return createElement('div', null, data);
+  }
+
+  function getCreatedCount() {
+    return createdCount;
+  }
+
+  return { UncachedDataComponent, getCreatedCount };
 }
 
 /**

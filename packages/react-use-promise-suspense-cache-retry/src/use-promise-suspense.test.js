@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import {
   createResourceCache,
-  UncachedDataComponent,
+  createUncachedDataComponent,
   CachedDataComponent,
   createFailingDataSource,
   createConditionalDataSource,
@@ -30,25 +30,25 @@ let failedTests = 0;
 
 function assert(condition, message) {
   if (!condition) {
-    console.error(`❌ FAIL: ${message}`);
-    testResults.push(`❌ ${message}`);
+    console.error(`FAIL: ${message}`);
+    testResults.push(`FAIL: ${message}`);
     failedTests++;
   } else {
-    console.log(`✅ PASS: ${message}`);
-    testResults.push(`✅ ${message}`);
+    console.log(`PASS: ${message}`);
+    testResults.push(`PASS: ${message}`);
   }
 }
 
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
-    console.error(`❌ FAIL: ${message}`);
+    console.error(`FAIL: ${message}`);
     console.error(`   Expected: ${expected}`);
     console.error(`   Actual: ${actual}`);
-    testResults.push(`❌ ${message} (expected: ${expected}, actual: ${actual})`);
+    testResults.push(`FAIL: ${message} (expected: ${expected}, actual: ${actual})`);
     failedTests++;
   } else {
-    console.log(`✅ PASS: ${message}`);
-    testResults.push(`✅ ${message}`);
+    console.log(`PASS: ${message}`);
+    testResults.push(`PASS: ${message}`);
   }
 }
 
@@ -62,9 +62,9 @@ async function test1_uncached_never_leaves_fallback() {
   const container = document.createElement('div');
   const root = createRoot(container);
 
-  let creationCount = 0;
+  const { UncachedDataComponent, getCreatedCount } = createUncachedDataComponent();
+
   function TestComponent() {
-    creationCount++;
     return createElement(
       'div',
       null,
@@ -81,17 +81,18 @@ async function test1_uncached_never_leaves_fallback() {
   });
 
   assertEqual(container.textContent, 'Loading...', '초기 렌더링 시 폴백 표시');
-  const initialCreationCount = creationCount;
-  assert(initialCreationCount >= 1, `초기 생성 횟수는 1 이상 (실제: ${initialCreationCount})`);
+  const initialCreatedCount = getCreatedCount();
+  assert(initialCreatedCount >= 1, `초기 Promise 생성 횟수는 1 이상 (실제: ${initialCreatedCount})`);
 
   await act(async () => {
     await delay(100);
   });
 
+  const finalCreatedCount = getCreatedCount();
   assertEqual(container.textContent, 'Loading...', '여러 틱 후에도 폴백 유지');
   assert(
-    creationCount >= 1,
-    `컴포넌트가 최소 1회 생성됨 (실제: ${creationCount})`
+    finalCreatedCount > 1,
+    `Promise 생성이 계속됨 (초기: ${initialCreatedCount}, 최종: ${finalCreatedCount})`
   );
 
   root.unmount();
@@ -230,8 +231,15 @@ async function test4_reset_boundary_without_evict_rethrows() {
 async function test5_evict_cache_and_reset_boundary_succeeds() {
   console.log('\n=== Test 5: 캐시 제거 + key 재설정 - 새 시도 성공, 콘텐츠 표시 ===');
 
-  const dataSource = createConditionalDataSource();
-  const cache = createResourceCache((id) => dataSource.fetchData(id, false));
+  let attemptNumber = 0;
+  const cache = createResourceCache(async (id) => {
+    attemptNumber++;
+    await delay(50);
+    if (attemptNumber === 1) {
+      throw new Error(`Failed to load ${id}`);
+    }
+    return `Data for ${id}`;
+  });
 
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -243,7 +251,7 @@ async function test5_evict_cache_and_reset_boundary_succeeds() {
       createElement(
         Suspense,
         { fallback: createElement('div', null, 'Loading...') },
-        createElement(CachedDataComponent, { id: 'conditional-1', cache })
+        createElement(CachedDataComponent, { id: 'resource-1', cache })
       )
     );
   }
@@ -256,37 +264,32 @@ async function test5_evict_cache_and_reset_boundary_succeeds() {
     await delay(100);
   });
 
-  assertEqual(container.textContent, 'Failed to load conditional-1', '첫 번째 에러 표시');
-  assertEqual(dataSource.getAttemptCount(), 1, '시도 횟수 1회');
+  assertEqual(container.textContent, 'Failed to load resource-1', '첫 번째 에러 표시');
+  assertEqual(attemptNumber, 1, '시도 횟수 1회');
+  assertEqual(cache.getFetchCount(), 1, 'fetch 횟수 1회');
 
-  cache.evict('conditional-1');
-
-  const successCache = createResourceCache((id) => dataSource.fetchData(id, true));
-
-  function RetryComponent({ boundaryKey }) {
-    return createElement(
-      ErrorBoundary,
-      { key: boundaryKey },
-      createElement(
-        Suspense,
-        { fallback: createElement('div', null, 'Loading...') },
-        createElement(CachedDataComponent, { id: 'conditional-1', cache: successCache })
-      )
-    );
-  }
+  cache.evict('resource-1');
 
   await act(async () => {
-    root.render(createElement(RetryComponent, { boundaryKey: 'key-2' }));
+    root.render(createElement(TestComponent, { boundaryKey: 'key-1' }));
   });
 
-  assertEqual(container.textContent, 'Loading...', '재시도 시 폴백 표시');
+  assertEqual(container.textContent, 'Failed to load resource-1', 'evict만으로는 에러 UI 유지 (boundary는 여전히 에러 상태)');
+  assertEqual(attemptNumber, 1, 'evict만으로는 시도 횟수 불변');
+
+  await act(async () => {
+    root.render(createElement(TestComponent, { boundaryKey: 'key-2' }));
+  });
+
+  assertEqual(container.textContent, 'Loading...', 'evict + key 재설정 시 폴백 표시');
 
   await act(async () => {
     await delay(100);
   });
 
-  assertEqual(container.textContent, 'Data for conditional-1', '재시도 성공, 콘텐츠 표시');
-  assertEqual(dataSource.getAttemptCount(), 2, '시도 횟수 2회');
+  assertEqual(container.textContent, 'Data for resource-1', '재시도 성공, 콘텐츠 표시');
+  assertEqual(attemptNumber, 2, '시도 횟수 2회');
+  assertEqual(cache.getFetchCount(), 2, 'fetch 횟수 2회');
 
   root.unmount();
 }
@@ -408,7 +411,7 @@ async function runAllTests() {
       console.error(`\n테스트 실패: ${failedTests}개의 검증이 실패했습니다.`);
       process.exit(1);
     } else {
-      console.log('\n✅ 모든 테스트 통과!');
+      console.log('\n모든 테스트 통과!');
       process.exit(0);
     }
   } catch (err) {

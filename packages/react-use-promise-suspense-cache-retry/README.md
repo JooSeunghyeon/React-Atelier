@@ -28,8 +28,9 @@ npm test
 ## 테스트 케이스
 
 ### 1. test1_uncached_never_leaves_fallback: 캐시 없이 렌더링마다 새 Promise 생성
-- 렌더링마다 새로운 Promise를 생성하면 폴백에서 벗어나지 못함
-- Promise 완료를 기다려도 DOM은 계속 폴백 상태 유지
+- 컴포넌트가 렌더링마다 새로운 Promise를 생성함 (팩토리가 생성 횟수 추적)
+- Promise 완료 시간을 충분히 기다려도 생성된 Promise 개수는 1개를 초과함
+- DOM은 계속 폴백 상태 유지
 
 ### 2. test2_cached_single_fetch_shows_content: 캐시된 Promise - fetch 1회
 - 캐시를 통해 같은 id로 동일한 Promise 반환
@@ -47,9 +48,10 @@ npm test
 - 시도 횟수는 증가하지 않음(캐시 재사용)
 
 ### 5. test5_evict_cache_and_reset_boundary_succeeds: 캐시 제거 + key 재설정
-- 캐시 항목을 제거하고 새로운 캐시로 재시도
-- 새로운 fetch가 발생하여 시도 횟수 증가
-- 성공 조건으로 재시도하면 콘텐츠가 정상 표시됨
+- 하나의 캐시에서 첫 시도는 실패, 두 번째 시도는 성공하도록 구성
+- evict() 호출만으로는 boundary가 여전히 에러 상태이므로 에러 UI 유지
+- evict() + boundary key 재설정 조합으로 새로운 fetch 발생
+- 두 번째 시도 성공, 콘텐츠 표시, 시도 횟수 2회, fetch 횟수 2회
 
 ### 6. test6_different_ids_separate_cache_entries: 다른 id는 별도 캐시 항목
 - 서로 다른 id를 가진 두 컴포넌트는 각각 독립적으로 fetch 실행
@@ -61,9 +63,9 @@ npm test
 
 ## 실행 결과
 
-모든 테스트는 Node.js + jsdom 환경에서 실행되며, 총 31개의 검증을 수행한다. 검증이 실패하면 프로세스가 종료 코드 1로 종료된다.
+모든 테스트는 Node.js + jsdom 환경에서 실행되며, 총 35개의 검증을 수행한다. 검증이 실패하면 프로세스가 종료 코드 1로 종료된다.
 
 ```
-총 31개 검증, 0개 실패
-✅ 모든 테스트 통과!
+총 35개 검증, 0개 실패
+모든 테스트 통과!
 ```
