@@ -22,5 +22,9 @@
   {
     "folder": "react-use-optimistic-failed-action-rollback",
     "summary": "React 19 useOptimistic에서 비동기 액션이 성공하면 낙관적 값이 확정되고 실패하면 롤백되는지, 연속 액션·리스트 추가 등 6가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제"
+  },
+  {
+    "folder": "react-use-promise-suspense-cache-retry",
+    "summary": "React 19 use(promise)와 Suspense에서 Promise 식별성에 따른 캐시 동작, 거부된 Promise의 Error Boundary 처리, key 재설정과 캐시 제거를 통한 재시도 등 7가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제"
   }
 ]
