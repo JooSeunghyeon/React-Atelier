@@ -95,16 +95,16 @@ async function test1_inline_ref_without_cleanup() {
   });
 
   const afterRerenderLog = refLog.getLog();
-  // 인라인 ref는 리렌더 시 이전 함수가 null로 호출되고 새 함수가 node로 호출될 수 있음
+  // 인라인 ref는 리렌더 시 이전 함수가 null로 호출되고 새 함수가 node로 호출됨
   // 실제 React 19 동작: 함수 식별성이 바뀌면 null → node 순서로 호출
-  assert(afterRerenderLog.length >= 2, `리렌더 시 ref 재호출 (실제: ${afterRerenderLog.length}회)`);
-  
-  const nullCallCount = afterRerenderLog.filter(entry => entry.node === 'null').length;
-  const nodeCallCount = afterRerenderLog.filter(entry => entry.node === 'node').length;
-  assert(nullCallCount >= 1, `null 호출 최소 1회 (실제: ${nullCallCount}회)`);
-  assert(nodeCallCount >= 1, `node 호출 최소 1회 (실제: ${nodeCallCount}회)`);
+  assertDeepEqual(afterRerenderLog, [
+    { label: 'inline', node: 'null' },
+    { label: 'inline', node: 'node' }
+  ], '리렌더 시 null → node 순서로 호출');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test2_stable_ref_no_reattach() {
@@ -143,8 +143,6 @@ async function test2_stable_ref_no_reattach() {
   const afterUnmountLog = refLog.getLog();
   assertEqual(afterUnmountLog.length, 1, '언마운트 시 null 호출 1회');
   assertEqual(afterUnmountLog[0].node, 'null', '언마운트 시 null 전달');
-
-  root.unmount();
 }
 
 async function test3_cleanup_return_inline() {
@@ -172,12 +170,10 @@ async function test3_cleanup_return_inline() {
 
   const afterRerenderLog = refLog.getLog();
   // cleanup 반환 + 인라인 = 식별성 변경 → 이전 cleanup 호출 → 새 attach 호출
-  assert(afterRerenderLog.length >= 2, `리렌더 시 cleanup → attach 호출 (실제: ${afterRerenderLog.length}회)`);
-  
-  const detachCount = afterRerenderLog.filter(entry => entry.label === 'cleanup-detach').length;
-  const attachCount = afterRerenderLog.filter(entry => entry.label === 'cleanup-attach').length;
-  assert(detachCount >= 1, `cleanup-detach 호출 최소 1회 (실제: ${detachCount}회)`);
-  assert(attachCount >= 1, `cleanup-attach 호출 최소 1회 (실제: ${attachCount}회)`);
+  assertDeepEqual(afterRerenderLog, [
+    { label: 'cleanup-detach', node: 'null' },
+    { label: 'cleanup-attach', node: 'node' }
+  ], '리렌더 시 cleanup-detach → cleanup-attach 순서로 호출');
 
   refLog.clearLog();
 
@@ -188,8 +184,6 @@ async function test3_cleanup_return_inline() {
   const afterUnmountLog = refLog.getLog();
   assertEqual(afterUnmountLog.length, 1, '언마운트 시 cleanup-detach 호출 1회');
   assertEqual(afterUnmountLog[0].label, 'cleanup-detach', '언마운트 시 cleanup 호출 확인');
-
-  root.unmount();
 }
 
 async function test4_cleanup_return_stable() {
@@ -227,8 +221,6 @@ async function test4_cleanup_return_stable() {
   const afterUnmountLog = refLog.getLog();
   assertEqual(afterUnmountLog.length, 1, '언마운트 시 cleanup-detach 호출 1회');
   assertEqual(afterUnmountLog[0].label, 'stable-cleanup-detach', '언마운트 시 cleanup 호출 확인');
-
-  root.unmount();
 }
 
 async function test5_subscription_leak_vs_cleanup() {
@@ -251,7 +243,9 @@ async function test5_subscription_leak_vs_cleanup() {
     button1.click();
   });
 
-  assert(counter1.getCount() > 1, `리렌더 후 구독 누적 (실제: ${counter1.getCount()}개, null 처리 누락으로 인한 누수)`);
+  // 리렌더 시 인라인 ref는 이전 함수 null 호출(subscribe 1회) + 새 함수 node 호출(subscribe 1회)
+  // 총 3회 subscribe: 초기 1 + null 호출 1 + node 호출 1 = 3
+  assertEqual(counter1.getCount(), 3, '리렌더 후 구독 3개 누적 (null/node 호출 시 모두 subscribe)');
 
   await act(async () => {
     root1.unmount();
@@ -287,9 +281,6 @@ async function test5_subscription_leak_vs_cleanup() {
   });
 
   assertEqual(counter2.getCount(), 0, '언마운트 후 활성 구독 0개 (cleanup으로 정리)');
-
-  root1.unmount();
-  root2.unmount();
 }
 
 async function test6_conditional_render() {
@@ -328,7 +319,9 @@ async function test6_conditional_render() {
   assertEqual(afterShowLog.length, 1, '요소 재등장 시 attach 호출 1회');
   assertEqual(afterShowLog[0].label, 'conditional-attach', '요소 재등장 시 attach 확인');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test7_key_change() {
@@ -355,15 +348,14 @@ async function test7_key_change() {
 
   const afterKeyChangeLog = refLog.getLog();
   // key가 변경되면 이전 요소 detach → 새 요소 attach
-  assert(afterKeyChangeLog.length >= 2, `key 변경 시 detach → attach 순서 (실제: ${afterKeyChangeLog.length}회)`);
-  
-  const detachIndex = afterKeyChangeLog.findIndex(entry => entry.label === 'conditional-detach');
-  const attachIndex = afterKeyChangeLog.findIndex(entry => entry.label === 'conditional-attach');
-  assert(detachIndex !== -1, 'key 변경 시 detach 호출 확인');
-  assert(attachIndex !== -1, 'key 변경 시 attach 호출 확인');
-  assert(detachIndex < attachIndex, 'key 변경 시 detach → attach 순서 확인');
+  assertDeepEqual(afterKeyChangeLog, [
+    { label: 'conditional-detach', node: 'null' },
+    { label: 'conditional-attach', node: 'node' }
+  ], 'key 변경 시 detach → attach 순서로 호출');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function runAllTests() {

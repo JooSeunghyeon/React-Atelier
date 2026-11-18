@@ -11,4 +11,4 @@
 - [react-context-provider-value-rerender](packages/react-context-provider-value-rerender/README.md): Context Provider의 value 객체를 매 렌더마다 새로 만들면 소비자 컴포넌트가 몇 번 리렌더링되는지 console.log로 확인하는 예제
 - [react-use-optimistic-failed-action-rollback](packages/react-use-optimistic-failed-action-rollback/README.md): React 19 useOptimistic에서 비동기 액션이 성공하면 낙관적 값이 확정되고 실패하면 롤백되는지, 연속 액션·리스트 추가 등 6가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제
 - [react-use-promise-suspense-cache-retry](packages/react-use-promise-suspense-cache-retry/README.md): React 19 use(promise)와 Suspense에서 Promise 식별성에 따른 캐시 동작, 거부된 Promise의 Error Boundary 처리, key 재설정과 캐시 제거를 통한 재시도 등 7가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제
-- [react-callback-ref-cleanup-reattach](packages/react-callback-ref-cleanup-reattach/README.md): React 19 콜백 ref의 cleanup 반환과 식별성에 따른 연결·해제 시점, 구독 누수 방지 등 7가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제
+- [react-callback-ref-cleanup-reattach](packages/react-callback-ref-cleanup-reattach/README.md): React 19 콜백 ref의 cleanup 반환과 식별성에 따른 연결·해제 시점, 구독 누수 메커니즘(null 호출 시에도 subscribe 실행) 등 7가지 케이스를 jsdom 환경의 실행 가능한 테스트로 확인하는 예제
