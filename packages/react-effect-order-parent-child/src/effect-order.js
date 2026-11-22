@@ -480,6 +480,7 @@ export function createDesignCDuplicateTest(logger) {
   const RegistryContext = createContext(null);
 
   function Parent() {
+    const [showOwner2, setShowOwner2] = useState(true);
     const registrationsRef = useRef(new Map());
     const [registry] = useState(() => {
       return {
@@ -517,8 +518,12 @@ export function createDesignCDuplicateTest(logger) {
 
     return createElement(RegistryContext.Provider, { value: registry },
       createElement('div', { 'data-testid': 'design-c-duplicate-parent' },
+        createElement('button', {
+          'data-testid': 'remove-owner2-button',
+          onClick: () => setShowOwner2(false),
+        }, 'Remove Owner2'),
         createElement(DuplicateChild, { id: 'same-id', owner: 'owner-1' }),
-        createElement(DuplicateChild, { id: 'same-id', owner: 'owner-2' })
+        showOwner2 && createElement(DuplicateChild, { id: 'same-id', owner: 'owner-2' })
       )
     );
   }

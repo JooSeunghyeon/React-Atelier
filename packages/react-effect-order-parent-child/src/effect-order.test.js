@@ -454,6 +454,19 @@ async function test8_design_c_duplicate() {
 
   logger.clearLog();
 
+  const button = container.querySelector('[data-testid="remove-owner2-button"]');
+  await act(async () => {
+    button.click();
+  });
+
+  const afterRemoveLog = logger.getLog();
+  console.log('After remove owner-2 log:', afterRemoveLog);
+
+  assertContains(afterRemoveLog, 'Unregistering id: same-id (owner mismatch, no-op)', 'owner-2 unregister는 owner mismatch로 no-op');
+  assertContains(afterRemoveLog, 'Parent useEffect: registered ids: [same-id]', 'owner-2 제거 후에도 등록은 [same-id]로 유지 (owner-1 소유)');
+
+  logger.clearLog();
+
   await act(async () => {
     root.unmount();
   });
@@ -462,12 +475,9 @@ async function test8_design_c_duplicate() {
   console.log('Unmount log:', unmountLog);
 
   assertContains(unmountLog, 'Unregistering id: same-id (owner match)', 'owner-1의 unregister는 등록을 제거함');
-  assertContains(unmountLog, 'Unregistering id: same-id (not registered, no-op)', 'owner-2의 unregister는 등록이 없어 no-op');
 
-  const ownerMatchIndex = unmountLog.indexOf('Unregistering id: same-id (owner match)');
-  const ownerMismatchIndex = unmountLog.indexOf('Unregistering id: same-id (not registered, no-op)');
-  assert(ownerMatchIndex !== -1 && ownerMismatchIndex !== -1, '두 unregister가 모두 호출됨');
-  assert(ownerMatchIndex < ownerMismatchIndex, 'owner-1의 unregister가 먼저 (자식 cleanup 순서)');
+  const ownerMatchCount = unmountLog.filter(e => e === 'Unregistering id: same-id (owner match)').length;
+  assertEqual(ownerMatchCount, 1, 'owner-1 unregister만 호출됨 (owner-2는 이미 cleanup됨)');
 }
 
 async function runAllTests() {
