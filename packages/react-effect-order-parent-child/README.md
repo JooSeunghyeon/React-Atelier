@@ -108,6 +108,7 @@ jsdom 환경에서 React 19 (react 19.3.1, react-dom 19.3.1)로 실행한 결과
 - 부모는 `useEffect`에서 모인 등록을 일괄 처리합니다.
 - 자식 effect가 부모 effect보다 먼저 도는 관찰된 순서를 이용합니다.
 - **렌더 중 부수 효과를 피합니다**: 렌더 본문에서 부모 ref/state를 변경하지 않으므로 StrictMode 이중 렌더나 버려진 동시 렌더에서 안전합니다.
+- **memo된 자식이 다시 렌더되지 않아도** effect 기반 등록이므로 등록이 유지됩니다 (렌더 중 등록은 memo된 자식이 미렌더 시 등록 소실).
 - 조건부 렌더링으로 자식이 사라져도 올바르게 반영됩니다.
 - 중복 등록은 소유자(owner) 비교로 감지하고 명시적으로 오류를 기록합니다.
 
@@ -147,7 +148,8 @@ npm run demo
 1. **설계 B를 렌더 중 초기화 대신 부모 useEffect로 변경**: Test 4 실패 (`registry is null at child useLayoutEffect`)
 2. **설계 C의 cleanup unregister 제거**: Test 5 실패 (언마운트 후 unregister 호출 단언 실패)
 3. **중복 등록 소유자 비교 제거**: Test 8 실패 (owner mismatch 단언 실패)
-4. **dispose 후 no-op 가드 제거**: Test 4 실패 (dispose 후 unregister가 no-op이 아님)
+4. **설계 B의 dispose 후 no-op 가드 제거**: Test 4 실패 (dispose 후 unregister가 no-op이 아님)
+5. **설계 C를 렌더 중 등록 방식으로 변경** (부모 렌더마다 등록 목록 비우고 렌더 중 registerChild로 채우기): Test 7 실패 (memo된 child-1이 등록에서 빠짐)
 
 ## 실행 환경
 

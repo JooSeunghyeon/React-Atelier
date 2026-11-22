@@ -412,7 +412,7 @@ async function test7_design_c_conditional() {
   assertContains(afterToggleLog, 'Parent useEffect: current children: [child-1]', '토글 후 1개 자식만 등록됨');
 
   const child1RenderCount = afterToggleLog.filter(e => e === 'child-1 render').length;
-  assertEqual(child1RenderCount, 1, 'child-1은 부모 리렌더로 다시 렌더되지만 effect deps 미변경으로 재실행 안됨');
+  assertEqual(child1RenderCount, 0, 'memo된 child-1은 다시 렌더되지 않음');
 
   const child1EffectSetupCount = afterToggleLog.filter(e => e === 'child-1 useEffect setup: registering').length;
   assertEqual(child1EffectSetupCount, 0, 'child-1 effect는 재실행되지 않아 등록 유지됨');

@@ -1,4 +1,4 @@
-import { createElement, useEffect, useLayoutEffect, useRef, useState, createContext, useContext } from 'react';
+import { createElement, useEffect, useLayoutEffect, useRef, useState, createContext, useContext, memo } from 'react';
 
 export function createLog() {
   const log = [];
@@ -457,7 +457,7 @@ export function createDesignCConditionalTest(logger) {
     return createElement('div', { 'data-testid': id });
   }
 
-  const ConditionalChildMemo = function ConditionalChildMemoInner({ id }) {
+  const ConditionalChildMemo = memo(function ConditionalChildMemoInner({ id }) {
     const registry = useContext(RegistryContext);
     logger.add(`${id} render`);
 
@@ -471,7 +471,7 @@ export function createDesignCConditionalTest(logger) {
     }, [id, registry]);
 
     return createElement('div', { 'data-testid': id });
-  };
+  });
 
   return Parent;
 }

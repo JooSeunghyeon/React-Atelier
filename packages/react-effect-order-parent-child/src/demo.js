@@ -189,7 +189,8 @@ async function demoDesignC() {
   console.log('  부모가 렌더 중에 안정적인 register/unregister 함수를 만듭니다.');
   console.log('  자식은 useEffect setup에서 register, cleanup에서 unregister합니다.');
   console.log('  부모는 useEffect에서 모인 등록을 일괄 처리합니다.');
-  console.log('  (자식 effect가 부모 effect보다 먼저 도는 순서를 이용합니다)\n');
+  console.log('  (자식 effect가 부모 effect보다 먼저 도는 순서를 이용합니다)');
+  console.log('  effect 기반이므로 memo된 자식이 다시 렌더되지 않아도 등록이 유지됩니다.\n');
 
   await act(async () => {
     root.render(createElement(Parent));
