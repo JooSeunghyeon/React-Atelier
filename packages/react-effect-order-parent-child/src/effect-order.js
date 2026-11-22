@@ -96,7 +96,7 @@ export function createMountOrderTest(logger) {
   return Parent;
 }
 
-export function createNaiveFailureTest(logger) {
+export function createNaiveFailureTest(logger, registryHolder) {
   function Parent() {
     const registryRef = useRef(null);
 
@@ -109,6 +109,9 @@ export function createNaiveFailureTest(logger) {
           this.items.push(id);
         },
       };
+      if (registryHolder) {
+        registryHolder.registry = registryRef.current;
+      }
       return () => {
         logger.add('Parent useEffect cleanup');
         registryRef.current = null;
@@ -143,7 +146,7 @@ export function createNaiveFailureTest(logger) {
   return Parent;
 }
 
-export function createDesignATest(logger) {
+export function createDesignATest(logger, registryHolder) {
   function Parent() {
     const registryRef = useRef(null);
 
@@ -156,6 +159,9 @@ export function createDesignATest(logger) {
           this.items.push(id);
         },
       };
+      if (registryHolder) {
+        registryHolder.registry = registryRef.current;
+      }
       return () => {
         logger.add('Parent useLayoutEffect cleanup');
         registryRef.current = null;
@@ -209,15 +215,35 @@ export function createDesignBTest(logger) {
   function Parent() {
     const [registry] = useState(() => {
       logger.add('Parent useState initializer: creating registry');
+      let disposed = false;
       return {
         items: [],
         register(id) {
+          if (disposed) {
+            logger.add(`Parent registry.register called with id: ${id} (after dispose, no-op)`);
+            return;
+          }
           logger.add(`Parent registry.register called with id: ${id}`);
           this.items.push(id);
         },
+        unregister(id) {
+          if (disposed) {
+            logger.add(`Parent registry.unregister called with id: ${id} (after dispose, no-op)`);
+            return;
+          }
+          logger.add(`Parent registry.unregister called with id: ${id}`);
+          const index = this.items.indexOf(id);
+          if (index !== -1) {
+            this.items.splice(index, 1);
+          }
+        },
         dispose() {
           logger.add('Parent registry.dispose called');
+          disposed = true;
           this.items = [];
+        },
+        isDisposed() {
+          return disposed;
         },
       };
     });
@@ -249,7 +275,10 @@ export function createDesignBTest(logger) {
         registry.register(id);
       }
       return () => {
-        logger.add(`${id} useLayoutEffect cleanup`);
+        logger.add(`${id} useLayoutEffect cleanup: unregistering`);
+        if (registry !== null) {
+          registry.unregister(id);
+        }
       };
     }, [id, registry]);
 
@@ -259,7 +288,10 @@ export function createDesignBTest(logger) {
         logger.add(`ERROR: registry is null at ${id} useEffect`);
       }
       return () => {
-        logger.add(`${id} useEffect cleanup`);
+        logger.add(`${id} useEffect cleanup: unregistering`);
+        if (registry !== null) {
+          registry.unregister(id);
+        }
       };
     }, [id, registry]);
 
@@ -270,12 +302,27 @@ export function createDesignBTest(logger) {
 }
 
 export function createDesignCTest(logger) {
+  const RegistryContext = createContext(null);
+
   function Parent() {
-    const childIdsRef = useRef([]);
+    const registeredIdsRef = useRef(new Set());
+    const [registry] = useState(() => {
+      logger.add('Parent useState initializer: creating registry functions');
+      return {
+        register(id) {
+          logger.add(`registry.register called with id: ${id}`);
+          registeredIdsRef.current.add(id);
+        },
+        unregister(id) {
+          logger.add(`registry.unregister called with id: ${id}`);
+          registeredIdsRef.current.delete(id);
+        },
+      };
+    });
 
     useEffect(() => {
-      logger.add(`Parent useEffect: processing ${childIdsRef.current.length} registrations`);
-      childIdsRef.current.forEach(id => {
+      logger.add(`Parent useEffect: processing ${registeredIdsRef.current.size} registrations`);
+      registeredIdsRef.current.forEach(id => {
         logger.add(`Parent processing registration: ${id}`);
       });
       return () => {
@@ -283,28 +330,25 @@ export function createDesignCTest(logger) {
       };
     });
 
-    function registerChild(id) {
-      logger.add(`Child ${id} calling registerChild (render phase)`);
-      if (!childIdsRef.current.includes(id)) {
-        childIdsRef.current.push(id);
-      }
-    }
-
-    return createElement('div', { 'data-testid': 'design-c-parent' },
-      createElement(ChildWithCallback, { id: 'child-1', registerChild }),
-      createElement(ChildWithCallback, { id: 'child-2', registerChild })
+    return createElement(RegistryContext.Provider, { value: registry },
+      createElement('div', { 'data-testid': 'design-c-parent' },
+        createElement(ChildWithEffectRegistration, { id: 'child-1' }),
+        createElement(ChildWithEffectRegistration, { id: 'child-2' })
+      )
     );
   }
 
-  function ChildWithCallback({ id, registerChild }) {
-    registerChild(id);
+  function ChildWithEffectRegistration({ id }) {
+    const registry = useContext(RegistryContext);
 
     useEffect(() => {
-      logger.add(`${id} useEffect setup`);
+      logger.add(`${id} useEffect setup: registering`);
+      registry.register(id);
       return () => {
-        logger.add(`${id} useEffect cleanup`);
+        logger.add(`${id} useEffect cleanup: unregistering`);
+        registry.unregister(id);
       };
-    }, [id]);
+    }, [id, registry]);
 
     return createElement('div', { 'data-testid': id });
   }
@@ -361,83 +405,135 @@ export function createRerenderTest(logger) {
 }
 
 export function createDesignCConditionalTest(logger) {
+  const RegistryContext = createContext(null);
+
   function Parent() {
     const [showChild2, setShowChild2] = useState(true);
-    const childIdsRef = useRef([]);
-    const renderChildIdsRef = useRef([]);
-
-    renderChildIdsRef.current = [];
+    const registeredIdsRef = useRef(new Set());
+    const [registry] = useState(() => {
+      return {
+        register(id) {
+          logger.add(`registry.register called with id: ${id}`);
+          registeredIdsRef.current.add(id);
+        },
+        unregister(id) {
+          logger.add(`registry.unregister called with id: ${id}`);
+          registeredIdsRef.current.delete(id);
+        },
+      };
+    });
 
     useEffect(() => {
-      childIdsRef.current = [...renderChildIdsRef.current];
-      logger.add(`Parent useEffect: current children: [${childIdsRef.current.join(', ')}]`);
+      logger.add(`Parent useEffect: current children: [${Array.from(registeredIdsRef.current).join(', ')}]`);
       return () => {
         logger.add('Parent useEffect cleanup');
       };
     });
 
-    function registerChild(id) {
-      if (!renderChildIdsRef.current.includes(id)) {
-        renderChildIdsRef.current.push(id);
-      }
-    }
-
-    return createElement('div', { 'data-testid': 'design-c-conditional-parent' },
-      createElement('button', {
-        'data-testid': 'toggle-button',
-        onClick: () => setShowChild2(prev => !prev),
-      }, 'Toggle Child2'),
-      createElement(ConditionalChild, { id: 'child-1', registerChild }),
-      showChild2 && createElement(ConditionalChild, { id: 'child-2', registerChild })
+    return createElement(RegistryContext.Provider, { value: registry },
+      createElement('div', { 'data-testid': 'design-c-conditional-parent' },
+        createElement('button', {
+          'data-testid': 'toggle-button',
+          onClick: () => setShowChild2(prev => !prev),
+        }, 'Toggle Child2'),
+        createElement(ConditionalChildMemo, { id: 'child-1' }),
+        showChild2 && createElement(ConditionalChild, { id: 'child-2' })
+      )
     );
   }
 
-  function ConditionalChild({ id, registerChild }) {
-    registerChild(id);
+  function ConditionalChild({ id }) {
+    const registry = useContext(RegistryContext);
 
     useEffect(() => {
-      logger.add(`${id} useEffect setup`);
+      logger.add(`${id} useEffect setup: registering`);
+      registry.register(id);
       return () => {
-        logger.add(`${id} useEffect cleanup`);
+        logger.add(`${id} useEffect cleanup: unregistering`);
+        registry.unregister(id);
       };
-    }, [id]);
+    }, [id, registry]);
 
     return createElement('div', { 'data-testid': id });
   }
+
+  const ConditionalChildMemo = function ConditionalChildMemoInner({ id }) {
+    const registry = useContext(RegistryContext);
+    logger.add(`${id} render`);
+
+    useEffect(() => {
+      logger.add(`${id} useEffect setup: registering`);
+      registry.register(id);
+      return () => {
+        logger.add(`${id} useEffect cleanup: unregistering`);
+        registry.unregister(id);
+      };
+    }, [id, registry]);
+
+    return createElement('div', { 'data-testid': id });
+  };
 
   return Parent;
 }
 
 export function createDesignCDuplicateTest(logger) {
+  const RegistryContext = createContext(null);
+
   function Parent() {
-    const registeredIdsRef = useRef(new Set());
+    const registrationsRef = useRef(new Map());
+    const [registry] = useState(() => {
+      return {
+        register(id, owner) {
+          if (registrationsRef.current.has(id)) {
+            logger.add(`ERROR: duplicate registration of id: ${id}`);
+          } else {
+            logger.add(`Registering id: ${id}`);
+            registrationsRef.current.set(id, owner);
+          }
+        },
+        unregister(id, owner) {
+          const currentOwner = registrationsRef.current.get(id);
+          if (currentOwner === owner) {
+            logger.add(`Unregistering id: ${id} (owner match)`);
+            registrationsRef.current.delete(id);
+          } else if (currentOwner === undefined) {
+            logger.add(`Unregistering id: ${id} (not registered, no-op)`);
+          } else {
+            logger.add(`Unregistering id: ${id} (owner mismatch, no-op)`);
+          }
+        },
+        getRegisteredIds() {
+          return Array.from(registrationsRef.current.keys());
+        },
+      };
+    });
 
     useEffect(() => {
-      logger.add(`Parent useEffect: registered ids: [${Array.from(registeredIdsRef.current).join(', ')}]`);
+      logger.add(`Parent useEffect: registered ids: [${registry.getRegisteredIds().join(', ')}]`);
       return () => {
         logger.add('Parent useEffect cleanup');
       };
     });
 
-    function registerChild(id) {
-      if (registeredIdsRef.current.has(id)) {
-        logger.add(`ERROR: duplicate registration of id: ${id}`);
-      } else {
-        logger.add(`Registering id: ${id}`);
-        registeredIdsRef.current.add(id);
-      }
-    }
-
-    return createElement('div', { 'data-testid': 'design-c-duplicate-parent' },
-      createElement(DuplicateChild, { id: 'same-id', registerChild }),
-      createElement(DuplicateChild, { id: 'same-id', registerChild })
+    return createElement(RegistryContext.Provider, { value: registry },
+      createElement('div', { 'data-testid': 'design-c-duplicate-parent' },
+        createElement(DuplicateChild, { id: 'same-id', owner: 'owner-1' }),
+        createElement(DuplicateChild, { id: 'same-id', owner: 'owner-2' })
+      )
     );
   }
 
-  function DuplicateChild({ id, registerChild }) {
-    registerChild(id);
+  function DuplicateChild({ id, owner }) {
+    const registry = useContext(RegistryContext);
 
-    return createElement('div', { 'data-testid': `${id}-child` });
+    useEffect(() => {
+      registry.register(id, owner);
+      return () => {
+        registry.unregister(id, owner);
+      };
+    }, [id, owner, registry]);
+
+    return createElement('div', { 'data-testid': `${id}-${owner}` });
   }
 
   return Parent;

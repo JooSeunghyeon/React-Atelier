@@ -33,6 +33,6 @@
   },
   {
     "folder": "react-effect-order-parent-child",
-    "summary": "부모와 자식 간 useLayoutEffect와 useEffect 실행 순서를 관찰하고, 순서에 기대는 설계(실패)와 렌더 중 초기화 또는 역방향 등록 패턴(성공)을 비교하는 8가지 테스트 케이스"
+    "summary": "부모와 자식 간 useLayoutEffect와 useEffect 실행 순서를 관찰하고, 순서에 기대는 설계(실패)와 렌더 중 초기화 또는 effect 기반 등록 패턴(성공)을 비교하는 8가지 테스트 케이스 (104개 검증)"
   }
 ]

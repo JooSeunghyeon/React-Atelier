@@ -58,7 +58,9 @@ async function demoMountOrder() {
   console.log('  - useEffect setup은 자식이 부모보다 먼저 실행됩니다.');
   console.log('  - 모든 useLayoutEffect setup이 모든 useEffect setup보다 먼저 실행됩니다.');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function demoNaiveFailure() {
@@ -67,7 +69,8 @@ async function demoNaiveFailure() {
   const container = document.createElement('div');
   const root = createRoot(container);
   const logger = createLog();
-  const Parent = createNaiveFailureTest(logger);
+  const registryHolder = {};
+  const Parent = createNaiveFailureTest(logger, registryHolder);
 
   console.log('[문제 상황]');
   console.log('  부모가 useEffect에서 registry 객체를 ref에 만듭니다.');
@@ -86,9 +89,12 @@ async function demoNaiveFailure() {
   console.log('\n[관찰]');
   console.log('  - 자식 useEffect가 부모 useEffect보다 먼저 실행됩니다.');
   console.log('  - 자식 시점에 registry가 아직 null이어서 등록이 실패합니다.');
+  console.log(`  - 마운트 후에도 registry.items는 비어 있습니다: ${JSON.stringify(registryHolder.registry.items)}`);
   console.log('  - 이 설계는 effect 실행 순서에 의존하므로 작동하지 않습니다.');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function demoDesignA() {
@@ -97,7 +103,8 @@ async function demoDesignA() {
   const container = document.createElement('div');
   const root = createRoot(container);
   const logger = createLog();
-  const Parent = createDesignATest(logger);
+  const registryHolder = {};
+  const Parent = createDesignATest(logger, registryHolder);
 
   console.log('[해결 시도]');
   console.log('  부모가 useLayoutEffect에서 registry를 만듭니다.');
@@ -116,9 +123,12 @@ async function demoDesignA() {
   console.log('\n[관찰]');
   console.log('  - 자식 useLayoutEffect는 부모 useLayoutEffect보다 먼저 실행되어 여전히 null입니다.');
   console.log('  - 자식 useEffect는 부모 useLayoutEffect보다 나중이므로 registry를 사용할 수 있습니다.');
+  console.log(`  - 마운트 후 items: ${JSON.stringify(registryHolder.registry.items)}`);
   console.log('  - 이 설계는 자식이 useEffect만 쓰면 보장되지만, useLayoutEffect는 보장되지 않습니다.');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function demoDesignB() {
@@ -161,11 +171,14 @@ async function demoDesignB() {
     console.log(`  ${index + 1}. ${entry}`);
   });
 
-  root.unmount();
+  console.log('\n[언마운트 경계]');
+  console.log('  - 부모 useEffect cleanup (dispose)이 먼저 실행됩니다.');
+  console.log('  - 그 뒤 자식 useEffect cleanup (unregister)이 실행됩니다.');
+  console.log('  - dispose 후 unregister는 no-op으로 처리됩니다 (disposed 플래그).');
 }
 
 async function demoDesignC() {
-  printSeparator('5. 설계 C: 역방향 등록 - 자식이 의도를 알리고 부모가 처리');
+  printSeparator('5. 설계 C: 자식이 effect에서 등록하고 부모가 처리');
 
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -173,8 +186,10 @@ async function demoDesignC() {
   const Parent = createDesignCTest(logger);
 
   console.log('[해결책]');
-  console.log('  자식이 렌더 중에 부모의 콜백을 호출해 등록 의도를 알립니다.');
-  console.log('  부모는 useEffect에서 모아진 등록을 일괄 처리합니다.\n');
+  console.log('  부모가 렌더 중에 안정적인 register/unregister 함수를 만듭니다.');
+  console.log('  자식은 useEffect setup에서 register, cleanup에서 unregister합니다.');
+  console.log('  부모는 useEffect에서 모인 등록을 일괄 처리합니다.');
+  console.log('  (자식 effect가 부모 effect보다 먼저 도는 순서를 이용합니다)\n');
 
   await act(async () => {
     root.render(createElement(Parent));
@@ -187,11 +202,13 @@ async function demoDesignC() {
   });
 
   console.log('\n[관찰]');
-  console.log('  - 자식들이 렌더 중에 등록 의도를 전달합니다.');
+  console.log('  - 자식들이 effect에서 등록합니다.');
   console.log('  - 부모 useEffect 시점에는 모든 자식의 등록이 모여 있습니다.');
-  console.log('  - effect 실행 순서에 의존하지 않고 렌더 결과에만 의존합니다.');
+  console.log('  - 렌더 중 부수 효과를 피하고 effect 기반 등록으로 안정적입니다.');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function runDemo() {

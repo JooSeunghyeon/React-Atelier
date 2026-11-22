@@ -65,24 +65,28 @@ jsdom 환경에서 React 19 (react 19.3.1, react-dom 19.3.1)로 실행한 결과
 
 ## 설계 비교
 
-| 설계 | 방법 | useLayoutEffect에서 사용 | useEffect에서 사용 | 순서 의존 |
-|------|------|--------------------------|-------------------|----------|
-| Naive (실패) | 부모 useEffect에서 준비 | ❌ 불가 | ❌ 불가 | ⚠️ 의존 |
-| 설계 A (부분) | 부모 useLayoutEffect에서 준비 | ❌ 불가 | ✅ 가능 | ⚠️ 의존 |
-| 설계 B (권장) | 렌더 중 초기화 + Context | ✅ 가능 | ✅ 가능 | ✅ 독립 |
-| 설계 C (권장) | 역방향 등록 (자식→부모) | ✅ 가능 | ✅ 가능 | ✅ 독립 |
+| 설계 | 방법 | useLayoutEffect에서 사용 | useEffect에서 사용 | 렌더 중 부수 효과 | 순서 의존 |
+|------|------|--------------------------|-------------------|------------------|----------|
+| Naive (실패) | 부모 useEffect에서 준비 | ❌ 불가 | ❌ 불가 | ✅ 없음 | ⚠️ 의존 |
+| 설계 A (부분) | 부모 useLayoutEffect에서 준비 | ❌ 불가 | ✅ 가능 | ✅ 없음 | ⚠️ 의존 |
+| 설계 B (권장) | 렌더 중 초기화 + Context | ✅ 가능 | ✅ 가능 | ✅ 없음 | ✅ 독립 |
+| 설계 C (권장) | effect 기반 등록/해제 | ✅ 가능 | ✅ 가능 | ✅ 없음 | ⚠️ 순서 이용* |
+
+\* 설계 C는 자식 effect가 부모 effect보다 먼저 도는 관찰된 순서를 **이용**합니다. 렌더 중 부수 효과를 피하고 effect에서 등록/해제하므로 안정적입니다.
 
 ### Naive 설계 (실패 재현)
 
 부모가 `useEffect`에서 registry를 만들고 자식이 `useEffect`에서 사용하려고 하면:
 - 자식 `useEffect`가 부모 `useEffect`보다 먼저 실행됩니다.
 - 자식 시점에 registry가 `null`이어서 등록이 실패합니다.
+- 마운트 후에도 registry.items는 비어 있습니다 (등록 영구 누락).
 
 ### 설계 A (부분 해결)
 
 부모가 `useLayoutEffect`에서 registry를 만들면:
 - 자식 `useLayoutEffect`는 부모 `useLayoutEffect`보다 먼저 실행되어 여전히 `null`입니다.
 - 자식 `useEffect`는 부모 `useLayoutEffect`보다 나중이므로 registry를 사용할 수 있습니다.
+- 마운트 후 items는 `['child-effect']`뿐입니다 (useLayoutEffect에서 시도한 등록은 누락).
 - 제한적으로만 보장됩니다.
 
 ### 설계 B (권장 - 렌더 중 초기화)
@@ -92,14 +96,29 @@ jsdom 환경에서 React 19 (react 19.3.1, react-dom 19.3.1)로 실행한 결과
 - 자식 `useLayoutEffect`와 `useEffect` 모두 registry에 접근할 수 있습니다.
 - 언마운트 시 부모 `useEffect` cleanup에서 정리됩니다.
 
-### 설계 C (권장 - 역방향 등록)
+**언마운트 경계:**
+- 부모 useEffect cleanup (dispose)이 자식 cleanup보다 먼저 실행됩니다.
+- dispose 후 자식 useEffect cleanup (unregister)이 도착합니다.
+- dispose 후 unregister는 disposed 플래그로 no-op 처리됩니다.
 
-자식이 렌더 중에 부모의 콜백을 호출해 등록 의도를 알리고, 부모가 `useEffect`에서 일괄 처리하면:
-- 자식들이 렌더 중에 등록 의도를 전달합니다.
-- 부모 `useEffect` 시점에는 모든 자식의 등록이 모여 있습니다.
-- effect 실행 순서에 의존하지 않고 렌더 결과에만 의존합니다.
+### 설계 C (권장 - effect 기반 등록/해제)
+
+부모가 렌더 중에 안정적인 `register`/`unregister` 함수를 만들고, 자식이 effect에서 등록/해제하면:
+- 자식은 `useEffect` setup에서 `register`, cleanup에서 `unregister`를 호출합니다.
+- 부모는 `useEffect`에서 모인 등록을 일괄 처리합니다.
+- 자식 effect가 부모 effect보다 먼저 도는 관찰된 순서를 이용합니다.
+- **렌더 중 부수 효과를 피합니다**: 렌더 본문에서 부모 ref/state를 변경하지 않으므로 StrictMode 이중 렌더나 버려진 동시 렌더에서 안전합니다.
 - 조건부 렌더링으로 자식이 사라져도 올바르게 반영됩니다.
-- 중복 등록은 명시적으로 감지하고 오류를 기록합니다.
+- 중복 등록은 소유자(owner) 비교로 감지하고 명시적으로 오류를 기록합니다.
+
+## 렌더 중 등록을 피해야 하는 이유
+
+렌더 본문에서 부모의 ref나 state를 변경하는 것은 부수 효과입니다:
+- **StrictMode 이중 렌더**: 렌더가 두 번 호출되어 같은 id가 두 번 등록되어 중복 오류가 거짓으로 나타납니다.
+- **버려진 동시 렌더**: React가 렌더를 버리면 등록이 유효하지 않은 상태로 남을 수 있습니다.
+- **memo된 자식 미렌더**: 부모만 리렌더되고 memo된 자식이 다시 렌더되지 않으면 자식의 등록이 사라집니다.
+
+effect 기반 등록/해제는 이 문제를 피합니다.
 
 ## 실행 방법
 
@@ -107,7 +126,7 @@ jsdom 환경에서 React 19 (react 19.3.1, react-dom 19.3.1)로 실행한 결과
 # 의존성 설치
 npm ci
 
-# 테스트 실행 (81개 검증)
+# 테스트 실행 (104개 검증)
 npm test
 
 # 데모 실행 (주요 시나리오 로그 출력)
@@ -117,16 +136,18 @@ npm run demo
 ## 테스트 결과
 
 3회 반복 실행 결과 모두 통과:
-- 총 테스트: 81개
+- 총 테스트: 104개
 - 실패: 0개
+- act 경고: 0개
 
 ## 변형 검사
 
 테스트가 실제 실패를 감지하는지 확인한 변형:
 
 1. **설계 B를 렌더 중 초기화 대신 부모 useEffect로 변경**: Test 4 실패 (`registry is null at child useLayoutEffect`)
-2. **설계 C의 일괄 처리 제거**: Test 5 실패 (`부모 useEffect에서 2개 등록 처리` 단언 실패)
-3. **중복 등록 규칙 제거**: Test 8 실패 (`ERROR: duplicate registration` 단언 실패)
+2. **설계 C의 cleanup unregister 제거**: Test 5 실패 (언마운트 후 unregister 호출 단언 실패)
+3. **중복 등록 소유자 비교 제거**: Test 8 실패 (owner mismatch 단언 실패)
+4. **dispose 후 no-op 가드 제거**: Test 4 실패 (dispose 후 unregister가 no-op이 아님)
 
 ## 실행 환경
 
@@ -139,5 +160,5 @@ npm run demo
 ## 파일 구조
 
 - `src/effect-order.js`: 테스트용 컴포넌트 정의
-- `src/effect-order.test.js`: 8개 테스트 케이스 (81개 검증)
+- `src/effect-order.test.js`: 8개 테스트 케이스 (104개 검증)
 - `src/demo.js`: 주요 시나리오의 로그 출력

@@ -28,6 +28,17 @@ Object.defineProperty(global, 'navigator', {
   configurable: true,
 });
 
+const originalConsoleError = console.error;
+let unexpectedErrors = [];
+
+console.error = (...args) => {
+  const message = args.join(' ');
+  if (message.includes('An update to Root inside a test was not wrapped in act(...)')) {
+    unexpectedErrors.push('Unexpected act warning');
+  }
+  originalConsoleError(...args);
+};
+
 let testResults = [];
 let failedTests = 0;
 
@@ -101,6 +112,19 @@ function assertIndexBefore(array, valueBefore, valueAfter, message) {
   }
 }
 
+function assertNoErrors(log, message) {
+  const errors = log.filter(entry => entry.startsWith('ERROR:'));
+  if (errors.length > 0) {
+    console.error(`FAIL: ${message}`);
+    console.error(`   Found ${errors.length} errors: ${JSON.stringify(errors)}`);
+    testResults.push(`FAIL: ${message}`);
+    failedTests++;
+  } else {
+    console.log(`PASS: ${message}`);
+    testResults.push(`PASS: ${message}`);
+  }
+}
+
 async function test1_mount_order() {
   console.log('\n=== Test 1: 마운트 순서 - useLayoutEffect와 useEffect 순서 확인 ===');
 
@@ -158,8 +182,6 @@ async function test1_mount_order() {
   assertIndexBefore(unmountLog, 'Parent useEffect cleanup', 'Child1 useEffect cleanup', 'useEffect cleanup은 부모가 먼저');
   assertIndexBefore(unmountLog, 'Parent useEffect cleanup', 'Child2 useEffect cleanup', 'useEffect cleanup은 부모가 먼저');
   assertIndexBefore(unmountLog, 'Child1 useEffect cleanup', 'GrandChild1 useEffect cleanup', 'useEffect cleanup은 부모가 먼저');
-
-  root.unmount();
 }
 
 async function test2_naive_failure() {
@@ -168,7 +190,8 @@ async function test2_naive_failure() {
   const container = document.createElement('div');
   const root = createRoot(container);
   const logger = createLog();
-  const Parent = createNaiveFailureTest(logger);
+  const registryHolder = {};
+  const Parent = createNaiveFailureTest(logger, registryHolder);
 
   await act(async () => {
     root.render(createElement(Parent));
@@ -183,7 +206,11 @@ async function test2_naive_failure() {
 
   assertIndexBefore(log, 'Child useEffect: attempting to register', 'Parent useEffect: creating registry', '자식 useEffect가 부모 useEffect보다 먼저 실행됨');
 
-  root.unmount();
+  assertEqual(registryHolder.registry.items.length, 0, '마운트 후에도 registry.items가 비어 있음 (등록 영구 누락)');
+
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test3_design_a() {
@@ -192,7 +219,8 @@ async function test3_design_a() {
   const container = document.createElement('div');
   const root = createRoot(container);
   const logger = createLog();
-  const Parent = createDesignATest(logger);
+  const registryHolder = {};
+  const Parent = createDesignATest(logger, registryHolder);
 
   await act(async () => {
     root.render(createElement(Parent));
@@ -210,7 +238,11 @@ async function test3_design_a() {
   assertIndexBefore(log, 'ChildWithLayoutEffect useLayoutEffect: checking registry', 'Parent useLayoutEffect: creating registry', '자식 useLayoutEffect가 부모보다 먼저');
   assertIndexBefore(log, 'Parent useLayoutEffect: creating registry', 'ChildWithEffect useEffect: checking registry', '부모 useLayoutEffect가 자식 useEffect보다 먼저');
 
-  root.unmount();
+  assertDeepEqual(registryHolder.registry.items, ['child-effect'], '마운트 후 items가 [child-effect]뿐임');
+
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test4_design_b() {
@@ -237,6 +269,8 @@ async function test4_design_b() {
   assertIndexBefore(log, 'Parent useState initializer: creating registry', 'child-layout useLayoutEffect: registering', 'registry 생성이 모든 effect보다 먼저');
   assertIndexBefore(log, 'Parent useState initializer: creating registry', 'child-effect useLayoutEffect: registering', 'registry 생성이 모든 effect보다 먼저');
 
+  assertNoErrors(log, '로그에 ERROR가 없음');
+
   logger.clearLog();
 
   await act(async () => {
@@ -248,12 +282,18 @@ async function test4_design_b() {
 
   assertContains(unmountLog, 'Parent useEffect cleanup: disposing registry', 'registry가 정리됨');
   assertContains(unmountLog, 'Parent registry.dispose called', 'dispose 메서드 호출됨');
+  assertContains(unmountLog, 'child-layout useLayoutEffect cleanup: unregistering', 'child-layout cleanup 실행됨');
+  assertContains(unmountLog, 'Parent registry.unregister called with id: child-layout (after dispose, no-op)', 'dispose 후 unregister는 no-op');
+  assertContains(unmountLog, 'child-effect useEffect cleanup: unregistering', 'child-effect cleanup 실행됨');
+  assertContains(unmountLog, 'Parent registry.unregister called with id: child-effect (after dispose, no-op)', 'dispose 후 unregister는 no-op');
 
-  root.unmount();
+  assertIndexBefore(unmountLog, 'child-layout useLayoutEffect cleanup: unregistering', 'Parent useEffect cleanup: disposing registry', 'useLayoutEffect cleanup 후 부모 useEffect cleanup');
+  assertIndexBefore(unmountLog, 'Parent useEffect cleanup: disposing registry', 'child-layout useEffect cleanup: unregistering', '부모 useEffect cleanup 후 자식 useEffect cleanup');
+  assertIndexBefore(unmountLog, 'Parent registry.dispose called', 'Parent registry.unregister called with id: child-layout (after dispose, no-op)', 'dispose가 자식 unregister보다 먼저');
 }
 
 async function test5_design_c() {
-  console.log('\n=== Test 5: 설계 C - 자식이 등록 의도를 부모에 알리고 부모 effect에서 처리 ===');
+  console.log('\n=== Test 5: 설계 C - 자식이 effect에서 등록하고 부모 effect에서 처리 ===');
 
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -267,18 +307,32 @@ async function test5_design_c() {
   const log = logger.getLog();
   console.log('Recorded log:', log);
 
-  assertContains(log, 'Child child-1 calling registerChild (render phase)', 'child-1이 렌더 중 등록 의도 전달');
-  assertContains(log, 'Child child-2 calling registerChild (render phase)', 'child-2가 렌더 중 등록 의도 전달');
+  assertContains(log, 'Parent useState initializer: creating registry functions', 'registry 함수가 렌더 중 생성됨');
+  assertContains(log, 'child-1 useEffect setup: registering', 'child-1이 effect에서 등록');
+  assertContains(log, 'registry.register called with id: child-1', 'child-1 등록됨');
+  assertContains(log, 'child-2 useEffect setup: registering', 'child-2가 effect에서 등록');
+  assertContains(log, 'registry.register called with id: child-2', 'child-2 등록됨');
   assertContains(log, 'Parent useEffect: processing 2 registrations', '부모 useEffect에서 2개 등록 처리');
   assertContains(log, 'Parent processing registration: child-1', 'child-1 처리됨');
   assertContains(log, 'Parent processing registration: child-2', 'child-2 처리됨');
 
-  assertIndexBefore(log, 'Child child-1 calling registerChild (render phase)', 'Parent useEffect: processing 2 registrations', '자식 등록이 부모 effect보다 먼저');
-  assertIndexBefore(log, 'Child child-2 calling registerChild (render phase)', 'Parent useEffect: processing 2 registrations', '자식 등록이 부모 effect보다 먼저');
-  assertIndexBefore(log, 'child-1 useEffect setup', 'Parent useEffect: processing 2 registrations', '자식 effect가 부모 effect보다 먼저');
-  assertIndexBefore(log, 'child-2 useEffect setup', 'Parent useEffect: processing 2 registrations', '자식 effect가 부모 effect보다 먼저');
+  assertIndexBefore(log, 'child-1 useEffect setup: registering', 'Parent useEffect: processing 2 registrations', '자식 effect가 부모 effect보다 먼저');
+  assertIndexBefore(log, 'child-2 useEffect setup: registering', 'Parent useEffect: processing 2 registrations', '자식 effect가 부모 effect보다 먼저');
 
-  root.unmount();
+  logger.clearLog();
+
+  await act(async () => {
+    root.unmount();
+  });
+
+  const unmountLog = logger.getLog();
+  console.log('Unmount log:', unmountLog);
+
+  assertContains(unmountLog, 'Parent useEffect cleanup', '부모 cleanup 실행됨');
+  assertContains(unmountLog, 'child-1 useEffect cleanup: unregistering', 'child-1 cleanup 실행됨');
+  assertContains(unmountLog, 'registry.unregister called with id: child-1', 'child-1 unregister 호출됨');
+
+  assertIndexBefore(unmountLog, 'Parent useEffect cleanup', 'child-1 useEffect cleanup: unregistering', '부모 cleanup이 자식보다 먼저');
 }
 
 async function test6_rerender_cleanup_order() {
@@ -320,11 +374,13 @@ async function test6_rerender_cleanup_order() {
   assertIndexBefore(log, 'Parent useEffect cleanup', 'Child useEffect setup', 'cleanup이 setup보다 먼저');
   assertIndexBefore(log, 'Child useEffect setup', 'Parent useEffect setup', 'useEffect setup은 자식이 먼저');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test7_design_c_conditional() {
-  console.log('\n=== Test 7: 설계 C - 자식 조건부 사라짐 ===');
+  console.log('\n=== Test 7: 설계 C - 자식 조건부 사라짐과 memo된 자식 ===');
 
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -338,6 +394,7 @@ async function test7_design_c_conditional() {
   const initialLog = logger.getLog();
   console.log('Initial log:', initialLog);
 
+  assertContains(initialLog, 'child-1 render', 'child-1 렌더됨');
   assertContains(initialLog, 'Parent useEffect: current children: [child-1, child-2]', '초기에 2개 자식 등록됨');
 
   logger.clearLog();
@@ -350,8 +407,15 @@ async function test7_design_c_conditional() {
   const afterToggleLog = logger.getLog();
   console.log('After toggle log:', afterToggleLog);
 
-  assertContains(afterToggleLog, 'child-2 useEffect cleanup', 'child-2 cleanup 실행됨');
+  assertContains(afterToggleLog, 'child-2 useEffect cleanup: unregistering', 'child-2 cleanup 실행됨');
+  assertContains(afterToggleLog, 'registry.unregister called with id: child-2', 'child-2 unregister 호출됨');
   assertContains(afterToggleLog, 'Parent useEffect: current children: [child-1]', '토글 후 1개 자식만 등록됨');
+
+  const child1RenderCount = afterToggleLog.filter(e => e === 'child-1 render').length;
+  assertEqual(child1RenderCount, 1, 'child-1은 부모 리렌더로 다시 렌더되지만 effect deps 미변경으로 재실행 안됨');
+
+  const child1EffectSetupCount = afterToggleLog.filter(e => e === 'child-1 useEffect setup: registering').length;
+  assertEqual(child1EffectSetupCount, 0, 'child-1 effect는 재실행되지 않아 등록 유지됨');
 
   logger.clearLog();
 
@@ -364,11 +428,13 @@ async function test7_design_c_conditional() {
 
   assertContains(afterToggleBackLog, 'Parent useEffect: current children: [child-1, child-2]', '다시 토글하면 2개 자식 등록됨');
 
-  root.unmount();
+  await act(async () => {
+    root.unmount();
+  });
 }
 
 async function test8_design_c_duplicate() {
-  console.log('\n=== Test 8: 설계 C - 중복 등록 감지 ===');
+  console.log('\n=== Test 8: 설계 C - 중복 등록 감지와 소유자 비교 ===');
 
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -386,7 +452,22 @@ async function test8_design_c_duplicate() {
   assertContains(log, 'ERROR: duplicate registration of id: same-id', '두 번째 등록 시 중복 오류 발생');
   assertContains(log, 'Parent useEffect: registered ids: [same-id]', '중복은 무시되고 1개만 등록됨');
 
-  root.unmount();
+  logger.clearLog();
+
+  await act(async () => {
+    root.unmount();
+  });
+
+  const unmountLog = logger.getLog();
+  console.log('Unmount log:', unmountLog);
+
+  assertContains(unmountLog, 'Unregistering id: same-id (owner match)', 'owner-1의 unregister는 등록을 제거함');
+  assertContains(unmountLog, 'Unregistering id: same-id (not registered, no-op)', 'owner-2의 unregister는 등록이 없어 no-op');
+
+  const ownerMatchIndex = unmountLog.indexOf('Unregistering id: same-id (owner match)');
+  const ownerMismatchIndex = unmountLog.indexOf('Unregistering id: same-id (not registered, no-op)');
+  assert(ownerMatchIndex !== -1 && ownerMismatchIndex !== -1, '두 unregister가 모두 호출됨');
+  assert(ownerMatchIndex < ownerMismatchIndex, 'owner-1의 unregister가 먼저 (자식 cleanup 순서)');
 }
 
 async function runAllTests() {
@@ -404,8 +485,9 @@ async function runAllTests() {
   console.log('\n=== 테스트 요약 ===');
   console.log(`총 테스트: ${testResults.length}개`);
   console.log(`실패: ${failedTests}개`);
+  console.log(`예상하지 못한 act 경고: ${unexpectedErrors.length}개`);
 
-  if (failedTests > 0) {
+  if (failedTests > 0 || unexpectedErrors.length > 0) {
     console.error('\n일부 테스트가 실패했습니다.');
     process.exitCode = 1;
   } else {
