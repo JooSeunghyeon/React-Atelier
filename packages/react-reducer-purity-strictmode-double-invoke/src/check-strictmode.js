@@ -1,7 +1,11 @@
+process.env.NODE_ENV = 'development';
+
 import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createElement, useReducer, StrictMode, useEffect } from 'react';
+
+console.log(`process.env.NODE_ENV: ${process.env.NODE_ENV}`);
 
 const dom = new JSDOM('<!DOCTYPE html><html><body><div id="root"></div></body></html>', {
   url: 'http://localhost',
@@ -31,7 +35,7 @@ function testReducer(state, action) {
   return state;
 }
 
-function TestComponent({ strict }) {
+function TestComponent() {
   const [state, dispatch] = useReducer(testReducer, 0, testInit);
 
   useEffect(() => {
@@ -39,14 +43,12 @@ function TestComponent({ strict }) {
     console.log(`effect called: ${effectCallCount}`);
   });
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement('button', { onClick: () => dispatch({ type: 'increment' }) }, 'Inc'),
     createElement('div', null, `Value: ${state.value}`)
   );
-
-  return strict ? createElement(StrictMode, null, component) : component;
 }
 
 async function testStrictModeOff() {
@@ -59,7 +61,7 @@ async function testStrictModeOff() {
   const root = createRoot(container);
 
   await act(async () => {
-    root.render(createElement(TestComponent, { strict: false }));
+    root.render(createElement(TestComponent));
   });
 
   console.log(`Total: init=${initCallCount}, reducer=${reducerCallCount}, effect=${effectCallCount}`);
@@ -88,7 +90,7 @@ async function testStrictModeOn() {
   const root = createRoot(container);
 
   await act(async () => {
-    root.render(createElement(TestComponent, { strict: true }));
+    root.render(createElement(StrictMode, null, createElement(TestComponent)));
   });
 
   console.log(`Total: init=${initCallCount}, reducer=${reducerCallCount}, effect=${effectCallCount}`);
@@ -108,7 +110,7 @@ async function testStrictModeOn() {
 }
 
 async function main() {
-  console.log('React StrictMode 동작 확인');
+  console.log('React StrictMode 동작 확인 (development 빌드)\n');
   await testStrictModeOff();
   await testStrictModeOn();
   console.log('\n완료');

@@ -1,7 +1,9 @@
+process.env.NODE_ENV = 'development';
+
 import { JSDOM } from 'jsdom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createElement } from 'react';
+import { createElement, StrictMode } from 'react';
 import {
   DesignAImpure,
   DesignBPureWithEventId,
@@ -16,6 +18,8 @@ import {
   createReducerCallCounter,
   CounterWithCallTracking,
 } from './reducer-components.js';
+
+console.log(`process.env.NODE_ENV: ${process.env.NODE_ENV}`);
 
 const dom = new JSDOM('<!DOCTYPE html><html><body><div id="root"></div></body></html>', {
   url: 'http://localhost',
@@ -38,7 +42,7 @@ function printSeparator(title) {
 }
 
 async function demoReducerCallCount() {
-  printSeparator('1. reducer와 init 호출 횟수 - React 19');
+  printSeparator('1. reducer와 init 호출 횟수 - development 빌드');
 
   console.log('[StrictMode off]\n');
 
@@ -52,7 +56,7 @@ async function demoReducerCallCount() {
   await act(async () => {
     rootOff.render(
       createElement(CounterWithCallTracking, {
-        strictMode: false,
+        
         counter: counterOff,
         onRender: ({ dispatch }) => {
           dispatchOff = dispatch;
@@ -95,13 +99,14 @@ async function demoReducerCallCount() {
 
   await act(async () => {
     rootOn.render(
-      createElement(CounterWithCallTracking, {
-        strictMode: true,
-        counter: counterOn,
-        onRender: ({ dispatch }) => {
-          dispatchOn = dispatch;
-        },
-      })
+      createElement(StrictMode, null,
+        createElement(CounterWithCallTracking, {
+          counter: counterOn,
+          onRender: ({ dispatch }) => {
+            dispatchOn = dispatch;
+          },
+        })
+      )
     );
   });
 
@@ -129,9 +134,10 @@ async function demoReducerCallCount() {
   });
 
   console.log('\n[관찰]');
-  console.log('- React 19에서는 StrictMode off/on 모두 동일합니다.');
-  console.log('- init 1회, dispatch마다 reducer 1회');
-  console.log('- 이전 React 18에서는 StrictMode가 이중 호출을 했지만, React 19에서는 제거되었습니다.');
+  console.log('- development 빌드에서는 StrictMode가 순수성 검증을 위해 함수를 이중 호출합니다.');
+  console.log('- StrictMode off: init 1회, dispatch마다 reducer 1회');
+  console.log('- StrictMode on: init 2회, dispatch마다 reducer 2회');
+  console.log('- production 빌드에서는 StrictMode도 이중 호출을 하지 않습니다.');
 }
 
 async function demoDesignAImpure() {
@@ -149,7 +155,7 @@ async function demoDesignAImpure() {
   await act(async () => {
     root1.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           state1 = state;
           dispatch1 = dispatch;
@@ -177,7 +183,7 @@ async function demoDesignAImpure() {
   await act(async () => {
     root2.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           state2 = state;
           dispatch2 = dispatch;
@@ -217,7 +223,7 @@ async function demoDesignBPure() {
   await act(async () => {
     root1.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           state1 = state;
         },
@@ -241,7 +247,7 @@ async function demoDesignBPure() {
   await act(async () => {
     root2.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           state2 = state;
         },
@@ -282,7 +288,7 @@ async function demoDesignCEffect() {
   await act(async () => {
     root.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: ({ state: s }) => {
           state = s;
         },
@@ -323,7 +329,7 @@ async function demoComparison() {
   await act(async () => {
     rootA1.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ dispatch }) => {
           dispatchA1 = dispatch;
         },
@@ -345,7 +351,7 @@ async function demoComparison() {
   await act(async () => {
     rootA2.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           stateA2 = state;
           dispatchA2 = dispatch;
@@ -374,7 +380,7 @@ async function demoComparison() {
   await act(async () => {
     rootB1.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -392,7 +398,7 @@ async function demoComparison() {
   await act(async () => {
     rootB2.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           stateB2 = state;
         },

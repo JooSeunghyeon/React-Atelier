@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createElement } from 'react';
+import { createElement, StrictMode } from 'react';
 import {
   setupTestEnvironment,
   ErrorBoundary,
@@ -54,7 +54,7 @@ async function test01_designA_singleInstance() {
   await act(async () => {
     root.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           capturedState = state;
           capturedDispatch = dispatch;
@@ -96,7 +96,7 @@ async function test02_designA_twoInstances() {
   await act(async () => {
     root1.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           state1 = state;
           dispatch1 = dispatch;
@@ -122,7 +122,7 @@ async function test02_designA_twoInstances() {
   await act(async () => {
     root2.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           state2 = state;
           dispatch2 = dispatch;
@@ -163,7 +163,7 @@ async function test03_designA_consecutiveDispatches() {
   await act(async () => {
     root.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           capturedState = state;
           capturedDispatch = dispatch;
@@ -205,7 +205,7 @@ async function test04_designB_singleInstance() {
   await act(async () => {
     root.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           capturedState = state;
         },
@@ -250,7 +250,7 @@ async function test05_designB_twoInstances() {
   await act(async () => {
     root1.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           state1 = state;
         },
@@ -272,7 +272,7 @@ async function test05_designB_twoInstances() {
   await act(async () => {
     root2.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           state2 = state;
         },
@@ -312,7 +312,7 @@ async function test06_designC_effectLog() {
   await act(async () => {
     root.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           capturedState = state;
         },
@@ -351,7 +351,7 @@ async function test07_designC_logSharing() {
   await act(async () => {
     root1.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -370,7 +370,7 @@ async function test07_designC_logSharing() {
   await act(async () => {
     root2.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -409,7 +409,7 @@ async function test08_callCount() {
   await act(async () => {
     root.render(
       createElement(CounterWithCallTracking, {
-        strictMode: false,
+        
         counter,
         onRender: ({ dispatch }) => {
           capturedDispatch = dispatch;
@@ -436,9 +436,9 @@ async function test08_callCount() {
   if (failedTests > 0) process.exitCode = 1;
 }
 
-// 테스트 9: StrictMode에서 reducer 호출 횟수 (React 19)
+// 테스트 9: StrictMode에서 reducer 호출 횟수 (development 빌드)
 async function test09_callCount_strictMode() {
-  printTestHeader('테스트 9: StrictMode에서 reducer 호출 횟수 (React 19)');
+  printTestHeader('테스트 9: StrictMode에서 reducer 호출 횟수 (development 빌드)');
 
   resetTestResults();
 
@@ -451,17 +451,18 @@ async function test09_callCount_strictMode() {
 
   await act(async () => {
     root.render(
-      createElement(CounterWithCallTracking, {
-        strictMode: true,
-        counter,
-        onRender: ({ dispatch }) => {
-          capturedDispatch = dispatch;
-        },
-      })
+      createElement(StrictMode, null,
+        createElement(CounterWithCallTracking, {
+          counter,
+          onRender: ({ dispatch }) => {
+            capturedDispatch = dispatch;
+          },
+        })
+      )
     );
   });
 
-  assertEqual(counter.getCallCount(), 1, 'React 19에서는 StrictMode에서도 init이 1번 호출됨');
+  assertEqual(counter.getCallCount(), 2, 'development 빌드에서 StrictMode는 init을 2번 호출함');
 
   counter.reset();
 
@@ -469,7 +470,7 @@ async function test09_callCount_strictMode() {
     capturedDispatch({ type: 'increment' });
   });
 
-  assertEqual(counter.getCallCount(), 1, 'React 19에서는 StrictMode에서도 reducer가 1번 호출됨');
+  assertEqual(counter.getCallCount(), 2, 'development 빌드에서 StrictMode는 dispatch 1회당 reducer를 2번 호출함');
 
   await act(async () => {
     root.unmount();
@@ -495,7 +496,7 @@ async function test10_consecutiveDispatches() {
   await act(async () => {
     root.render(
       createElement(CounterWithCallTracking, {
-        strictMode: false,
+        
         counter,
         onRender: ({ dispatch }) => {
           capturedDispatch = dispatch;
@@ -538,7 +539,7 @@ async function test11_bailOut() {
   await act(async () => {
     root.render(
       createElement(BailOutComponent, {
-        strictMode: false,
+        
         bailOut,
         onRender: ({ dispatch, renderCount }) => {
           capturedDispatch = dispatch;
@@ -587,7 +588,7 @@ async function test12_throwingReducer() {
           caughtError = error;
         },
         children: createElement(ThrowingComponent, {
-          strictMode: false,
+          
           throwing,
           onRender: ({ dispatch }) => {
             capturedDispatch = dispatch;
@@ -628,7 +629,7 @@ async function test13_compareDesignAandB() {
   await act(async () => {
     rootA1.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ dispatch }) => {
           dispatchA1 = dispatch;
         },
@@ -650,7 +651,7 @@ async function test13_compareDesignAandB() {
   await act(async () => {
     rootA2.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           stateA2 = state;
           dispatchA2 = dispatch;
@@ -676,7 +677,7 @@ async function test13_compareDesignAandB() {
   await act(async () => {
     rootB1.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -694,7 +695,7 @@ async function test13_compareDesignAandB() {
   await act(async () => {
     rootB2.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           stateB2 = state;
         },
@@ -735,7 +736,7 @@ async function test14_designA_logAccumulation() {
   await act(async () => {
     root.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ dispatch }) => {
           capturedDispatch = dispatch;
         },
@@ -780,7 +781,7 @@ async function test15_designB_sequentialIds() {
   await act(async () => {
     root.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           capturedState = state;
         },
@@ -829,7 +830,7 @@ async function test16_designA_clearAndAdd() {
   await act(async () => {
     root.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           capturedState = state;
           capturedDispatch = dispatch;
@@ -880,7 +881,7 @@ async function test17_designB_clearAndAdd() {
   await act(async () => {
     root.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           capturedState = state;
         },
@@ -929,7 +930,7 @@ async function test18_designC_clearAction() {
   await act(async () => {
     root.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -976,7 +977,7 @@ async function test19_tripleDispatch() {
   await act(async () => {
     root.render(
       createElement(CounterWithCallTracking, {
-        strictMode: false,
+        
         counter,
         onRender: ({ dispatch }) => {
           capturedDispatch = dispatch;
@@ -1017,7 +1018,7 @@ async function test20_designA_testInterference() {
   await act(async () => {
     root1.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ dispatch }) => {
           dispatch1 = dispatch;
         },
@@ -1045,7 +1046,7 @@ async function test20_designA_testInterference() {
   await act(async () => {
     root2.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state, dispatch }) => {
           state2 = state;
           dispatch2 = dispatch;
@@ -1081,7 +1082,7 @@ async function test21_designB_testIndependence() {
   await act(async () => {
     root1.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );
@@ -1105,7 +1106,7 @@ async function test21_designB_testIndependence() {
   await act(async () => {
     root2.render(
       createElement(DesignBPureWithEventId, {
-        strictMode: false,
+        
         onRender: ({ state }) => {
           state2 = state;
         },
@@ -1146,7 +1147,7 @@ async function test22_bailOut_thenUpdate() {
   await act(async () => {
     root.render(
       createElement(BailOutComponent, {
-        strictMode: false,
+        
         bailOut,
         onRender: ({ state, dispatch, renderCount }) => {
           capturedState = state;
@@ -1197,7 +1198,7 @@ async function test23_designA_resetImportance() {
   await act(async () => {
     root.render(
       createElement(DesignAImpure, {
-        strictMode: false,
+        
         onRender: ({ state: s, dispatch: d }) => {
           state = s;
           dispatch = d;
@@ -1246,7 +1247,7 @@ async function test24_designC_logAccumulation() {
   await act(async () => {
     root.render(
       createElement(DesignCPureWithEffect, {
-        strictMode: false,
+        
         onRender: () => {},
       })
     );

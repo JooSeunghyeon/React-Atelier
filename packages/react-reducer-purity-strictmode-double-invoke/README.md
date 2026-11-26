@@ -1,30 +1,31 @@
-# React useReducer 순수성과 StrictMode
+# React useReducer 순수성과 StrictMode 이중 호출
 
-useReducer의 reducer와 초기화 함수는 렌더 중에 호출되는 순수 함수여야 합니다. 이 패키지는 모듈 변수 카운터로 id를 만들거나 외부 로그에 push하는 불순한 reducer가 어떤 문제를 일으키는지 보여주고, 세 가지 설계를 비교합니다.
+useReducer의 reducer와 초기화 함수는 렌더 중에 호출되는 순수 함수여야 합니다. 이 패키지는 모듈 변수 카운터로 id를 만들거나 외부 로그에 push하는 불순한 reducer가 development 빌드의 StrictMode 이중 호출에서 어떤 문제를 일으키는지 보여주고, 세 가지 설계를 비교합니다.
 
 ## 질문
 
-reducer에서 모듈 변수를 증가시키거나 외부 배열에 push하면 어떤 일이 벌어질까요? 여러 컴포넌트 인스턴스가 같은 모듈 상태를 공유하면 어떻게 될까요?
+reducer에서 모듈 변수를 증가시키거나 외부 배열에 push하면 어떤 일이 벌어질까요? StrictMode 이중 호출에서는 어떻게 드러날까요?
 
 ## 확인한 내용
 
 jsdom 환경에서 React 19 (react 19.3.1, react-dom 19.3.1, Node.js v22.23.4)로 실행한 결과입니다.
 
-### React 19에서 StrictMode 동작 변경
+### React 19 development 빌드에서 StrictMode 동작
 
-**중요:** React 19에서는 StrictMode의 이중 호출이 더 이상 발생하지 않습니다.
+**중요:** React 19의 development 빌드에서는 StrictMode가 순수성 검증을 위해 reducer와 init 함수를 여전히 이중 호출합니다.
 
-| 상황 | StrictMode off | StrictMode on (React 19) |
-|------|----------------|--------------------------|
-| init 함수 | 1회 | 1회 |
-| dispatch 1회 | reducer 1회 | reducer 1회 |
-| effect setup | 1회 | 1회 |
+| 빌드 | StrictMode | init 함수 | dispatch 1회당 reducer | effect setup |
+|------|-----------|-----------|----------------------|--------------|
+| development | off | 1회 | 1회 | 1회 |
+| development | on | **2회** | **2회** | **2회** |
+| production | off | 1회 | 1회 | 1회 |
+| production | on | 1회 | 1회 | 1회 |
 
-이전 React 버전 (18 이하)에서는 StrictMode가 개발 모드에서 함수를 이중 호출하여 순수성을 검증했지만, React 19에서는 이 동작이 제거되었습니다.
+development 빌드에서는 StrictMode가 순수하지 않은 함수를 감지하기 위해 함수를 이중 호출합니다. production 빌드에서는 성능을 위해 이중 호출을 하지 않습니다.
 
-따라서 이 예제는 StrictMode 이중 호출 대신 **여러 컴포넌트 인스턴스 간 모듈 상태 공유 문제**에 초점을 맞춥니다.
+**process.env.NODE_ENV가 설정되지 않으면 React는 production 빌드를 로드합니다.** 이 패키지의 모든 스크립트는 development 빌드를 명시적으로 사용합니다.
 
-### reducer 호출 횟수
+### reducer 호출 횟수 (development 빌드, StrictMode off)
 
 | 상황 | 호출 횟수 |
 |------|-----------|
@@ -72,10 +73,11 @@ function impureReducer(state, action) {
 
 **문제점:**
 
-1. **모듈 상태 공유**: 여러 컴포넌트 인스턴스가 같은 모듈 카운터와 로그를 공유하여 id가 엉킵니다.
-2. **테스트 간 간섭**: 테스트를 순서대로 실행하면 이전 테스트의 모듈 상태가 남아 있어 결과가 달라집니다.
-3. **재렌더링 시 중복**: 부모가 리렌더되어 자식이 다시 마운트되면 같은 액션으로 다른 id가 생성됩니다.
-4. **예측 불가능**: 렌더가 버려지거나 중단되어도 모듈 상태는 변경되어 다음 렌더에 영향을 줍니다.
+1. **StrictMode 이중 호출**: development 빌드에서 StrictMode는 reducer를 2번 호출하므로 모듈 카운터가 2씩 증가하고 로그가 중복됩니다.
+2. **모듈 상태 공유**: 여러 컴포넌트 인스턴스가 같은 모듈 카운터와 로그를 공유하여 id가 엉킵니다.
+3. **테스트 간 간섭**: 테스트를 순서대로 실행하면 이전 테스트의 모듈 상태가 남아 있어 결과가 달라집니다.
+4. **재렌더링 시 중복**: 부모가 리렌더되어 자식이 다시 마운트되면 같은 액션으로 다른 id가 생성됩니다.
+5. **예측 불가능**: 렌더가 버려지거나 중단되어도 모듈 상태는 변경되어 다음 렌더에 영향을 줍니다.
 
 **첫 번째 컴포넌트가 1번 dispatch 후:**
 - 상태 items: `[{ id: 1, text: 'first' }]`
@@ -114,10 +116,11 @@ function Component() {
 ```
 
 **장점:**
-- reducer가 순수 함수이므로 재렌더나 중단에도 안전합니다.
+- reducer가 순수 함수이므로 StrictMode 이중 호출에도 안전합니다.
 - 각 컴포넌트 인스턴스가 독립적인 nextId 상태를 가집니다.
 - id가 항상 순차적입니다 (1, 2, 3, ...).
 - 테스트 간 간섭이 없습니다.
+- development와 production 빌드에서 동일하게 동작합니다.
 
 **첫 번째 컴포넌트:**
 - 상태 items: `[{ id: 1, text: 'item' }]`
@@ -164,8 +167,9 @@ function Component() {
 ```
 
 **장점:**
-- reducer는 순수하므로 재렌더나 중단에도 안전합니다.
+- reducer는 순수하므로 StrictMode 이중 호출에도 안전합니다.
 - 부수효과는 useEffect로 분리되어 렌더 중 부수효과를 피합니다.
+- development와 production 빌드에서 동일하게 동작합니다.
 
 **한계:**
 - effect 로그는 여전히 모듈 배열을 사용하므로 테스트 간 간섭이 있습니다.
@@ -173,17 +177,18 @@ function Component() {
 
 ## 설계 비교 요약
 
-| 설계 | 여러 인스턴스 | 테스트 간섭 | 순수성 | 권장 |
-|------|--------------|------------|--------|------|
-| A (불순) | id 충돌 | 있음 | 불순 | ✗ |
-| B (순수 + event id) | 독립적 | 없음 | 순수 | ✓ |
-| C (순수 + effect) | 독립적 | 로그 간섭 | 순수 | △ |
+| 설계 | StrictMode 이중 호출 | 여러 인스턴스 | 테스트 간섭 | 순수성 | 권장 |
+|------|---------------------|--------------|------------|--------|------|
+| A (불순) | 문제 발생 | id 충돌 | 있음 | 불순 | ✗ |
+| B (순수 + event id) | 안전 | 독립적 | 없음 | 순수 | ✓ |
+| C (순수 + effect) | 안전 | 독립적 | 로그 간섭 | 순수 | △ |
 
 **권장 사항:**
-- reducer는 항상 순수 함수여야 합니다.
+- reducer는 항상 순수 함수여야 합니다. StrictMode 이중 호출에도 안전합니다.
 - id 생성은 reducer 외부 (이벤트 핸들러, useState)에서 수행합니다.
 - 부수효과 (로그, API 호출 등)는 useEffect로 분리합니다.
 - 설계 B가 가장 간단하고 명확합니다.
+- development 빌드에서 테스트하여 StrictMode 이중 호출을 확인하세요.
 
 ## 실행 방법
 
@@ -204,6 +209,8 @@ npm run demo
 - 총 테스트: 24개
 - 실패: 0개
 
+테스트 9번은 development 빌드에서 StrictMode가 init을 2회, dispatch 1회당 reducer를 2회 호출하는 것을 확인합니다.
+
 ## 실행 환경
 
 - Node.js: v22.23.4
@@ -211,24 +218,25 @@ npm run demo
 - react: 19.3.1
 - react-dom: 19.3.1
 - jsdom: 25.0.1
+- **모든 스크립트는 development 빌드로 실행됩니다** (파일 첫 줄에서 `process.env.NODE_ENV = 'development'` 설정)
 
-## React 버전 차이
+## React 19 StrictMode 동작
 
-**React 18 이하:**
-- StrictMode에서 개발 모드에 한해 함수를 이중 호출하여 순수성을 검증했습니다.
-- init은 2회, dispatch마다 reducer는 2회, effect setup은 2회 실행되었습니다.
+**React 19 development 빌드:**
+- StrictMode에서 여전히 함수를 이중 호출하여 순수성을 검증합니다.
+- init은 2회, dispatch마다 reducer는 2회, effect setup은 2회 실행됩니다.
 
-**React 19 (현재 버전):**
-- StrictMode의 이중 호출이 제거되었습니다.
-- 대신 다른 메커니즘으로 순수성을 검증할 수 있습니다.
+**React 19 production 빌드:**
+- StrictMode에서도 이중 호출을 하지 않습니다.
+- 성능을 위해 함수를 1회만 호출합니다.
 
-이 패키지는 React 19 기준으로 작성되었으며, 불순한 reducer의 문제를 여러 컴포넌트 인스턴스 간 상태 공유와 테스트 간섭 관점에서 보여줍니다.
+이 패키지는 development 빌드로 실행하여 StrictMode 이중 호출에서 불순한 reducer의 문제를 보여줍니다.
 
 ## 한계
 
 - reducer가 순수하면 여러 번 호출되어도 문제가 없습니다. 같은 입력에 같은 출력을 보장하기 때문입니다.
 - 모듈 변수 사용은 테스트와 디버깅을 어렵게 만듭니다.
-- 프로덕션 빌드에서도 불순한 reducer는 여러 인스턴스 간 간섭 문제가 있습니다.
+- development와 production 빌드에서 호출 횟수가 다르므로, development에서 테스트하는 것이 중요합니다.
 
 ## 파일 구조
 

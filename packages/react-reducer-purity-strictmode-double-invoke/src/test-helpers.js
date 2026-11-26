@@ -1,3 +1,5 @@
+process.env.NODE_ENV = 'development';
+
 import { JSDOM } from 'jsdom';
 import { Component, createElement } from 'react';
 

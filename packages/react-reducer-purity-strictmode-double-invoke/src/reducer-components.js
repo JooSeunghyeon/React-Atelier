@@ -36,7 +36,7 @@ function impureInit(initialItems) {
   return { items: initialItems };
 }
 
-export function DesignAImpure({ strictMode = false, onRender }) {
+export function DesignAImpure({ onRender }) {
   const [state, dispatch] = useReducer(impureReducer, [], impureInit);
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function DesignAImpure({ strictMode = false, onRender }) {
     }
   });
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement(
@@ -66,8 +66,6 @@ export function DesignAImpure({ strictMode = false, onRender }) {
       )
     )
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
 
 // 설계 B: 순수 reducer + 이벤트 핸들러에서 id 생성
@@ -97,7 +95,7 @@ function pureInit(initialItems) {
   return { items: initialItems, nextId: 1 };
 }
 
-export function DesignBPureWithEventId({ strictMode = false, onRender }) {
+export function DesignBPureWithEventId({ onRender }) {
   const [state, dispatch] = useReducer(pureReducerWithId, [], pureInit);
   const [nextId, setNextId] = useState(1);
 
@@ -112,7 +110,7 @@ export function DesignBPureWithEventId({ strictMode = false, onRender }) {
     setNextId(nextId + 1);
   };
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement('button', { onClick: handleAdd }, 'Add'),
@@ -129,8 +127,6 @@ export function DesignBPureWithEventId({ strictMode = false, onRender }) {
       )
     )
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
 
 // 설계 C: 순수 reducer + useEffect로 부수효과 분리
@@ -163,7 +159,7 @@ function pureInitWithEffectLog(initialItems) {
   return { items: initialItems, nextId: 1, lastAction: null };
 }
 
-export function DesignCPureWithEffect({ strictMode = false, onRender }) {
+export function DesignCPureWithEffect({ onRender }) {
   const [state, dispatch] = useReducer(pureReducerWithEffectLog, [], pureInitWithEffectLog);
   const [nextId, setNextId] = useState(1);
 
@@ -188,7 +184,7 @@ export function DesignCPureWithEffect({ strictMode = false, onRender }) {
     setNextId(nextId + 1);
   };
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement('button', { onClick: handleAdd }, 'Add'),
@@ -205,8 +201,6 @@ export function DesignCPureWithEffect({ strictMode = false, onRender }) {
       )
     )
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
 
 // 테스트용 헬퍼: reducer 호출 횟수 추적
@@ -238,7 +232,7 @@ export function createReducerCallCounter() {
   };
 }
 
-export function CounterWithCallTracking({ strictMode = false, counter, onRender }) {
+export function CounterWithCallTracking({ counter, onRender }) {
   const [state, dispatch] = useReducer(counter.reducer, 0, counter.init);
 
   useEffect(() => {
@@ -247,7 +241,7 @@ export function CounterWithCallTracking({ strictMode = false, counter, onRender 
     }
   });
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement(
@@ -262,8 +256,6 @@ export function CounterWithCallTracking({ strictMode = false, counter, onRender 
     ),
     createElement('div', null, `Count: ${state.count}`)
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
 
 // bail-out 테스트용: 같은 state 반환
@@ -288,7 +280,7 @@ export function createBailOutReducer() {
   };
 }
 
-export function BailOutComponent({ strictMode = false, bailOut, onRender }) {
+export function BailOutComponent({ bailOut, onRender }) {
   const [state, dispatch] = useReducer(bailOut.reducer, { value: 0 });
   const [renderCount, setRenderCount] = useState(0);
 
@@ -302,7 +294,7 @@ export function BailOutComponent({ strictMode = false, bailOut, onRender }) {
     }
   }, [state, renderCount, onRender]);
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement(
@@ -318,8 +310,6 @@ export function BailOutComponent({ strictMode = false, bailOut, onRender }) {
     createElement('div', null, `Value: ${state.value}`),
     createElement('div', null, `Renders: ${renderCount}`)
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
 
 // Error Boundary 테스트용
@@ -344,7 +334,7 @@ export function createThrowingReducer() {
   };
 }
 
-export function ThrowingComponent({ strictMode = false, throwing, onRender }) {
+export function ThrowingComponent({ throwing, onRender }) {
   const [state, dispatch] = useReducer(throwing.reducer, { count: 0 });
 
   useEffect(() => {
@@ -353,7 +343,7 @@ export function ThrowingComponent({ strictMode = false, throwing, onRender }) {
     }
   });
 
-  const component = createElement(
+  return createElement(
     'div',
     null,
     createElement(
@@ -368,6 +358,4 @@ export function ThrowingComponent({ strictMode = false, throwing, onRender }) {
     ),
     createElement('div', null, `Count: ${state.count}`)
   );
-
-  return strictMode ? createElement(StrictMode, null, component) : component;
 }
