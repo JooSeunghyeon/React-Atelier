@@ -1,0 +1,16 @@
+{
+  "name": "react-reducer-purity-strictmode-double-invoke",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node src/reducer-purity.test.js",
+    "demo": "node src/demo.js"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  }
+}
